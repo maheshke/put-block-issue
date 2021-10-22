@@ -23,3 +23,15 @@ $ aws ebs start-snapshot --volume-size 1 --tags Key=test,Value=test
 $ ./put-block-issue --snapshot "snap-08fd7d63ffe3ecf8a"
 Failed to put block. Snapshot snap-042b76f2513c1ab98. Exception - : curlCode: 56, Failure when receiving data from the peer
 ```
+
+## While listing blocks works without any issue
+```sh
+./put-block-issue --snapshot <Snapshot ID> --list
+```
+
+* Example output:
+
+```sh
+$ ./put-block-issue --snapshot "snap-025202fa8f7378356" --list
+ListSnapshotBlocks for snapshot snap-025202fa8f7378356 is successful
+```

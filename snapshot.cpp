@@ -5,6 +5,7 @@
 
 #include <aws/core/Aws.h>
 #include <aws/core/utils/HashingUtils.h>
+#include <aws/ebs/model/ListSnapshotBlocksRequest.h>
 #include <aws/ebs/model/PutSnapshotBlockRequest.h>
 #include <aws/ebs/model/ChecksumAlgorithm.h>
 #include <aws/ebs/EBSClient.h>
@@ -36,7 +37,7 @@ struct Args
     static void usage(void)
     {
         printf("Usage:\n"
-                "./put-block-issue --snapshot <EBS snapshot ID>\n");
+                "./put-block-issue --snapshot <EBS snapshot ID> [--list]\n");
     }
 
     string snapshot;
@@ -48,6 +49,7 @@ class Snapshot
         Snapshot(std::string snapshot);
         ~Snapshot() = default;
 
+        void listBlocks(void);
         void putOneBlock(void);
 
     private:
@@ -63,6 +65,31 @@ Snapshot::Snapshot(string snapshot) :
     Aws::Client::ClientConfiguration config;
 
     mClient = Aws::EBS::EBSClient(config);
+}
+
+void Snapshot::listBlocks(void)
+{
+    Aws::EBS::Model::ListSnapshotBlocksRequest request;
+    request.SetSnapshotId(mSnapshot);
+    request.SetMaxResults(100);
+
+    auto outcome = mClient.ListSnapshotBlocks(request);
+
+    if (outcome.IsSuccess())
+    {
+        cout << "ListSnapshotBlocks for snapshot " << mSnapshot << " is successful" << std::endl;
+
+        return;
+    }
+    else
+    {
+        auto err = outcome.GetError();
+
+        cout << "Error: ListSnapshotBlocks: " << mSnapshot <<
+            err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
+
+        return;
+    }
 }
 
 void Snapshot::putOneBlock(void)
@@ -103,11 +130,13 @@ int main(int argc, char **argv)
     static struct option long_options[] =
     {
 	{"snapshot",	required_argument,       0, 's'},
+	{"list",	no_argument,             0, 'l'},
 	{"help",	no_argument,             0, 'h'},
 	{0, 0, 0, 0}
     };
 
     Args args;
+    bool list = false;
 
     while (true)
     {
@@ -125,6 +154,9 @@ int main(int argc, char **argv)
         {
             case 's':
                 args.snapshot.assign(optarg);
+                break;
+            case 'l':
+                list = true;
                 break;
             case 'h':
                 Args::usage();
@@ -148,7 +180,14 @@ int main(int argc, char **argv)
     {
         Snapshot snapshot(args.snapshot);
 
-        snapshot.putOneBlock();
+        if (list)
+        {
+            snapshot.listBlocks();
+        }
+        else
+        {
+            snapshot.putOneBlock();
+        }
     }
 
     Aws::ShutdownAPI(options);
