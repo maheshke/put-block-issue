@@ -50,7 +50,7 @@ class Snapshot
         ~Snapshot() = default;
 
         void listBlocks(void);
-        void putOneBlock(void);
+        int putOneBlock(int blockIndex);
 
     private:
         std::string mSnapshot;
@@ -63,6 +63,12 @@ Snapshot::Snapshot(string snapshot) :
     mSnapshot(snapshot)
 {
     Aws::Client::ClientConfiguration config;
+
+    config.proxyHost = "web-proxy.houston.hpecorp.net";
+    config.proxyPort = 8080;
+    config.proxyScheme = Aws::Http::Scheme::HTTP;
+    config.connectTimeoutMs = 30000;
+    config.requestTimeoutMs = 600000;
 
     mClient = Aws::EBS::EBSClient(config);
 }
@@ -92,7 +98,7 @@ void Snapshot::listBlocks(void)
     }
 }
 
-void Snapshot::putOneBlock(void)
+int Snapshot::putOneBlock(int blockIndex)
 {
     auto blockSize = 512 * KB;
     char buffer[blockSize];
@@ -106,7 +112,7 @@ void Snapshot::putOneBlock(void)
 
     Aws::EBS::Model::PutSnapshotBlockRequest request;
     request.SetSnapshotId(mSnapshot);
-    request.SetBlockIndex(0);
+    request.SetBlockIndex(blockIndex);
     request.SetDataLength(blockSize);
     request.SetBody(sstream);
     request.SetChecksum(checksum);
@@ -118,11 +124,17 @@ void Snapshot::putOneBlock(void)
     {
         auto err = outcome.GetError();
 
-        cout << "Failed to put block. Snapshot " << mSnapshot <<
+        cout << "Failed to put block " << blockIndex << ". Snapshot " << mSnapshot <<
             ". Exception - " << err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
 
-        return;
+        printf("Error code %d\n", outcome.GetError().GetErrorType());
+
+        return -1;
     }
+
+    cout << "Wrote block " << blockIndex << std::endl;
+
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -175,7 +187,10 @@ int main(int argc, char **argv)
     }
 
     Aws::SDKOptions options;
+    options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Trace;
     Aws::InitAPI(options);
+
+    int err;
 
     {
         Snapshot snapshot(args.snapshot);
@@ -184,13 +199,19 @@ int main(int argc, char **argv)
         {
             snapshot.listBlocks();
         }
-        else
+
+        for(auto i = 0; i < 210; i++)
         {
-            snapshot.putOneBlock();
+            err = snapshot.putOneBlock(i);
+            if (err && list)
+            {
+                // Issue ListSnapshotBlocks once again
+                snapshot.listBlocks();
+            }
         }
     }
 
     Aws::ShutdownAPI(options);
 
-    return 0;
+    return err;
 }
